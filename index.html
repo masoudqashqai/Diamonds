@@ -160,6 +160,20 @@
     #replay.show { opacity: 1; pointer-events: auto; }
     #replay:hover { background: rgba(150, 205, 255, .18); }
 
+    .tap.loading { opacity: .55; }
+    #browserWarn {
+      display: none;
+      max-width: 330px;
+      font-family: "Cormorant Garamond", serif;
+      font-size: 16px; line-height: 1.5;
+      color: #ffdcee;
+      background: rgba(120, 60, 110, .28);
+      border: 1px solid rgba(255, 180, 220, .38);
+      border-radius: 14px;
+      padding: 13px 17px;
+      margin-top: 2px;
+    }
+
     /* subtle cinematic vignette on top of everything */
     .vignette {
       position: fixed; inset: 0; z-index: 10; pointer-events: none;
@@ -182,8 +196,9 @@
 
   <div id="start">
     <div class="gem"></div>
-    <div class="tap">Tap to begin</div>
-    <div class="hint">turn your sound on ♪</div>
+    <div class="tap loading" id="tapLabel">Loading…</div>
+    <div class="hint" id="tapHint">just a moment ♪</div>
+    <div id="browserWarn"></div>
   </div>
 
   <!-- the instrumental -->
@@ -218,12 +233,23 @@
 
     const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
+    /* ---------------------------------------------------------
+       QUALITY TIERS — phones get a much lighter scene so it stays
+       smooth and the audio isn't starved of CPU. Desktop keeps the
+       full glassy/dispersion look you approved as v3.
+       The two heavy features (transmission + dispersion) are OFF on
+       mobile; brighter reflections + internal glow keep it diamond-y.
+    --------------------------------------------------------- */
+    const Q = isMobile
+      ? { dpr: 1.0, aa: false, transmission: 0.0, dispersion: 0.0, bloom: 0.26, stars: 220, sparkles: 6,  envInt: 3.6, emissive: 0.85, exposure: 1.1 }
+      : { dpr: 2.0, aa: true,  transmission: 0.4, dispersion: 4.0, bloom: 0.35, stars: 700, sparkles: 11, envInt: 3.3, emissive: 0.65, exposure: 1.12 };
+
     const canvas = document.getElementById('scene');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.aa, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, Q.dpr));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.12;
+    renderer.toneMappingExposure = Q.exposure;
     renderer.setClearColor(0x05060a, 1);
 
     const scene = new THREE.Scene();
@@ -286,13 +312,13 @@
     const gemMat = new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
       emissive: new THREE.Color(0x3a1c33),   // faint internal glow so it never reads as black
-      emissiveIntensity: 0.65,
+      emissiveIntensity: Q.emissive,
       metalness: 0.0,
       roughness: 0.015,
-      transmission: 0.40,       // glassy, but reflections now fill the body instead of dark see-through
+      transmission: Q.transmission,  // glassy see-through (desktop only — the expensive part)
       thickness: 1.1,
       ior: 2.42,                // diamond's real index of refraction
-      dispersion: 4.0,          // splits light into rainbow "fire" — the eye-catching part
+      dispersion: Q.dispersion, // rainbow "fire" (desktop only — the expensive part)
       reflectivity: 1.0,
       specularIntensity: 1.0,
       clearcoat: 1.0,
@@ -301,7 +327,7 @@
       iridescenceIOR: 1.35,
       attenuationColor: new THREE.Color(0xfff0f8),
       attenuationDistance: 3.0,
-      envMapIntensity: 3.3,
+      envMapIntensity: Q.envInt,
       flatShading: true,
       side: THREE.DoubleSide
     });
@@ -382,7 +408,7 @@
     const sparkleTex = makeSparkleTexture();
     const sparkleCols = [0xffffff, 0xffc2e6, 0xd9b3ff];
     const sparkles = [];
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < Q.sparkles; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({
         map: sparkleTex, color: sparkleCols[i % 3], transparent: true,
         blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, opacity: 0
@@ -396,7 +422,7 @@
 
     /* ---------- starfield ---------- */
     const starGeo = new THREE.BufferGeometry();
-    const STAR_COUNT = isMobile ? 420 : 700;
+    const STAR_COUNT = Q.stars;
     const sp = new Float32Array(STAR_COUNT * 3);
     for (let i = 0; i < STAR_COUNT; i++) {
       const r = 16 + Math.random() * 30;
@@ -426,7 +452,7 @@
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.35, 0.5, 0.85  // strength, radius, threshold (gentle glow, only true highlights)
+      Q.bloom, 0.5, 0.85  // strength, radius, threshold (gentle glow, only true highlights)
     );
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
@@ -436,16 +462,56 @@
     const startEl = document.getElementById('start');
     const messageEl = document.getElementById('message');
     const replayEl = document.getElementById('replay');
+    const tapLabel = document.getElementById('tapLabel');
+    const tapHint = document.getElementById('tapHint');
+    const browserWarn = document.getElementById('browserWarn');
 
     let startTime = null;
     let revealed = false;
     let replayShown = false;
+    let audioReady = false;
+
+    // In-app browsers (Telegram, Instagram, Facebook, etc.) often block audio
+    // and render WebGL slowly — nudge her to open it in a real browser.
+    const UA = navigator.userAgent || '';
+    const inAppBrowser = /Telegram|Instagram|FBAN|FBAV|FB_IAB|Line\/|Snapchat|Pinterest|Twitter/i.test(UA);
+    if (inAppBrowser) {
+      browserWarn.textContent = 'For the music & smooth playback, tap the ⋯ menu and choose “Open in browser” (Chrome / Safari).';
+      browserWarn.style.display = 'block';
+    }
+
+    // Preload the song and only promise "Tap to begin" once it can play through.
+    function markReady() {
+      if (audioReady) return;
+      audioReady = true;
+      tapLabel.textContent = 'Tap to begin';
+      tapLabel.classList.remove('loading');
+      tapHint.textContent = 'turn your sound on ♪';
+    }
+    audio.addEventListener('canplaythrough', markReady, { once: true });
+    // Some mobile browsers don't fire canplaythrough until play() is called —
+    // so fall back to enabling the tap after a short wait regardless.
+    setTimeout(markReady, 5000);
+    try { audio.load(); } catch (e) {}
+
+    // If playback is ever blocked, let the next tap anywhere retry it.
+    function armAudioRetry() {
+      const retry = () => {
+        audio.play().then(() => {
+          document.removeEventListener('touchend', retry);
+          document.removeEventListener('click', retry);
+        }).catch(() => {});
+      };
+      document.addEventListener('touchend', retry, { passive: true });
+      document.addEventListener('click', retry);
+    }
 
     function begin() {
       if (startTime !== null) return;
       startEl.classList.add('hide');
-      audio.currentTime = 0;
-      audio.play().catch(() => {}); // if blocked, visuals still run
+      try { audio.currentTime = 0; } catch (e) {}
+      const p = audio.play();
+      if (p && p.catch) p.catch(() => armAudioRetry()); // visuals run regardless; retry on next tap
       startTime = performance.now();
     }
     startEl.addEventListener('click', begin);
@@ -508,8 +574,8 @@
           messageEl.classList.add('show');
         }
         bloom.strength = revealed
-          ? Math.min(0.35 + (t - REVEAL_AT) * 0.12, 0.62)
-          : 0.35;
+          ? Math.min(Q.bloom + (t - REVEAL_AT) * 0.12, Q.bloom + 0.27)
+          : Q.bloom;
 
         if (!replayShown && t >= REPLAY_AT) {
           replayShown = true;
