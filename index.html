@@ -66,16 +66,23 @@
     #sheen {
       position: absolute; inset: 0;
       clip-path: polygon(35% 22%, 65% 22%, 87.5% 40%, 50% 93.5%, 12.5% 40%);
-      background: linear-gradient(112deg,
-        transparent 38%, rgba(255,255,255,.0) 44%,
-        rgba(255,255,255,.85) 50%,
-        rgba(255,255,255,.0) 56%, transparent 62%);
-      background-size: 280% 100%;
-      mix-blend-mode: screen;
-      animation: sweep 4.6s linear infinite;
+      overflow: hidden;
       pointer-events: none;
     }
-    @keyframes sweep { from { background-position: 170% 0; } to { background-position: -90% 0; } }
+    /* one non-repeating band moved by transform: no tile seams, compositor-only */
+    #sheen::before {
+      content: ""; position: absolute; left: 0; top: -10%; width: 100%; height: 120%;
+      background: linear-gradient(112deg,
+        rgba(255,255,255,0) 36%, rgba(255,255,255,.75) 50%, rgba(255,255,255,0) 64%) no-repeat;
+      transform: translateX(-110%);
+      will-change: transform;
+      animation: sweep 4.6s linear infinite;
+    }
+    @keyframes sweep {
+      0%   { transform: translateX(-110%); }
+      60%  { transform: translateX(110%); }
+      100% { transform: translateX(110%); }
+    }
 
     /* rotating ray-burst behind the gem */
     #rays {
@@ -224,7 +231,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       #gemWrap { animation: none; }
-      #sheen { animation-duration: 8s; }
+      #sheen::before { animation-duration: 8s; }
     }
   </style>
 </head>
