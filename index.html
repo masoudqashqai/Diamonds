@@ -51,9 +51,9 @@
       perspective: 900px;
     }
     #gemWrap {
-      width: min(64vw, 300px);
+      width: min(82vw, 420px);
       aspect-ratio: 1 / 0.92;
-      position: relative;
+      position: relative; z-index: 2;
       transform: scale(.34);
       opacity: .0;
       transition: transform 11s cubic-bezier(.17,.67,.3,1), opacity 2s ease;
@@ -82,6 +82,39 @@
       pointer-events: none;
     }
     @keyframes sweep { from { background-position: 170% 0; } to { background-position: -90% 0; } }
+
+    /* rotating ray-burst behind the gem */
+    #rays {
+      position: absolute; inset: 0; margin: auto;
+      width: min(140vw, 760px); aspect-ratio: 1; border-radius: 50%;
+      z-index: 1; pointer-events: none;
+      background: repeating-conic-gradient(from 0deg,
+        rgba(255,200,240,0) 0deg, rgba(255,200,240,.13) 2.2deg, rgba(255,200,240,0) 7deg);
+      -webkit-mask: radial-gradient(closest-side, transparent 14%, #000 34%, transparent 78%);
+              mask: radial-gradient(closest-side, transparent 14%, #000 34%, transparent 78%);
+      opacity: 0; transition: opacity 2.6s ease;
+      animation: spin 64s linear infinite;
+    }
+    .started #rays { opacity: .5; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* breathing halo right behind the gem */
+    #halo {
+      position: absolute; left: -16%; top: -16%; width: 132%; aspect-ratio: 1;
+      border-radius: 50%; z-index: -1; pointer-events: none;
+      background: radial-gradient(closest-side, rgba(255,130,210,.5), rgba(170,110,255,.2) 55%, transparent 76%);
+      filter: blur(8px); animation: breathe 3.8s ease-in-out infinite;
+    }
+    @keyframes breathe { 0%,100%{opacity:.55; transform:scale(.96);} 50%{opacity:.95; transform:scale(1.08);} }
+
+    /* prismatic "fire" — shifting rainbow across the facets (fakes dispersion) */
+    #fire {
+      position: absolute; inset: 0; z-index: 4; pointer-events: none;
+      clip-path: polygon(35% 22%, 65% 22%, 87.5% 40%, 50% 93.5%, 12.5% 40%);
+      background: conic-gradient(from 0deg, #ff2d76, #ffd24d, #46ffb0, #45c2ff, #c86bff, #ff2d76);
+      mix-blend-mode: screen; opacity: .22; filter: blur(2px);
+      animation: spin 9s linear infinite;
+    }
 
     /* sparkles */
     .spark {
@@ -194,7 +227,9 @@
   <div id="stars"></div>
 
   <div id="stage">
+    <div id="rays"></div>
     <div id="gemWrap">
+      <div id="halo"></div>
       <!-- faceted diamond -->
       <svg id="gem" viewBox="0 0 200 184" xmlns="http://www.w3.org/2000/svg" aria-label="diamond">
         <defs>
@@ -242,6 +277,7 @@
         </g>
       </svg>
       <div id="sheen"></div>
+      <div id="fire"></div>
     </div>
   </div>
 
