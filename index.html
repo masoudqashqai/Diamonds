@@ -57,10 +57,11 @@
       transform: scale(.34);
       opacity: .0;
       transition: transform 11s cubic-bezier(.17,.67,.3,1), opacity 2s ease;
-      filter: drop-shadow(0 0 42px rgba(255,120,205,.42)) drop-shadow(0 0 90px rgba(170,110,255,.28));
     }
     .started #gemWrap { transform: scale(1); opacity: 1; }
-    #gem { width: 100%; height: 100%; display: block; overflow: visible; }
+    /* glow lives on the static drawing only, so animating siblings never re-run the filter */
+    #gem { width: 100%; height: 100%; display: block; overflow: visible;
+      filter: drop-shadow(0 0 42px rgba(255,120,205,.42)) drop-shadow(0 0 90px rgba(170,110,255,.28)); }
 
     /* travelling light shimmer, clipped to the gem silhouette */
     #sheen {
@@ -103,8 +104,8 @@
     #halo {
       position: absolute; left: -16%; top: -16%; width: 132%; aspect-ratio: 1;
       border-radius: 50%; z-index: -1; pointer-events: none;
-      background: radial-gradient(closest-side, rgba(255,130,210,.5), rgba(170,110,255,.2) 55%, transparent 76%);
-      filter: blur(8px); animation: breathe 3.8s ease-in-out infinite;
+      background: radial-gradient(closest-side, rgba(255,130,210,.5), rgba(170,110,255,.2) 55%, rgba(170,110,255,0) 80%);
+      animation: breathe 3.8s ease-in-out infinite;
     }
     @keyframes breathe { 0%,100%{opacity:.55; transform:scale(.96);} 50%{opacity:.95; transform:scale(1.08);} }
 
