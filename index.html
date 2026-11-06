@@ -372,9 +372,10 @@
     (function placeScints() {
       // facet points as % of the gem box (from the SVG facet vertices)
       const pts = [
-        [35,22],[65,22],[41,30],[59,30],
-        [27.5,40],[50,40],[72.5,40],[12.5,40],[87.5,40],
-        [40,60],[60,60],[50,93]
+        // interior points only — flashes on the outline corners read as stray lines
+        [41,30],[59,30],
+        [27.5,40],[50,40],[72.5,40],
+        [40,60],[60,60]
       ];
       for (let i = 0; i < pts.length; i++) {
         const s = document.createElement('div');
