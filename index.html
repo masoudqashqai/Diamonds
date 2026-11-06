@@ -241,8 +241,8 @@
        mobile; brighter reflections + internal glow keep it diamond-y.
     --------------------------------------------------------- */
     const Q = isMobile
-      ? { dpr: 1.0, aa: false, transmission: 0.0, dispersion: 0.0, bloom: 0.26, stars: 220, sparkles: 6,  envInt: 3.6, emissive: 0.85, exposure: 1.1 }
-      : { dpr: 2.0, aa: true,  transmission: 0.4, dispersion: 4.0, bloom: 0.35, stars: 700, sparkles: 11, envInt: 3.3, emissive: 0.65, exposure: 1.12 };
+      ? { dpr: 1.0, aa: false, transmission: 0.0, dispersion: 0.0, useBloom: false, bloom: 0, lights: false, clearcoat: 0.0, iridescence: 0.0, stars: 170, sparkles: 6,  envInt: 3.7, emissive: 0.95, exposure: 1.12 }
+      : { dpr: 2.0, aa: true,  transmission: 0.4, dispersion: 4.0, useBloom: true,  bloom: 0.35, lights: true,  clearcoat: 1.0, iridescence: 0.25, stars: 700, sparkles: 11, envInt: 3.3, emissive: 0.65, exposure: 1.12 };
 
     const canvas = document.getElementById('scene');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.aa, powerPreference: 'high-performance' });
@@ -321,9 +321,9 @@
       dispersion: Q.dispersion, // rainbow "fire" (desktop only — the expensive part)
       reflectivity: 1.0,
       specularIntensity: 1.0,
-      clearcoat: 1.0,
+      clearcoat: Q.clearcoat,
       clearcoatRoughness: 0.06,
-      iridescence: 0.25,
+      iridescence: Q.iridescence,
       iridescenceIOR: 1.35,
       attenuationColor: new THREE.Color(0xfff0f8),
       attenuationDistance: 3.0,
@@ -443,19 +443,27 @@
     scene.add(new THREE.AmbientLight(0x4a3a52, 0.5));
     const key = new THREE.DirectionalLight(0xfff0f6, 0.8); key.position.set(3, 4, 5); scene.add(key);
 
-    const glintA = new THREE.PointLight(0xffffff, 14, 20); scene.add(glintA);
-    const glintB = new THREE.PointLight(0xff9ad6, 12, 20); scene.add(glintB);
-    const glintC = new THREE.PointLight(0xc79bff, 10, 20); scene.add(glintC);
+    const glints = [];
+    if (Q.lights) {
+      const gA = new THREE.PointLight(0xffffff, 14, 20);
+      const gB = new THREE.PointLight(0xff9ad6, 12, 20);
+      const gC = new THREE.PointLight(0xc79bff, 10, 20);
+      scene.add(gA, gB, gC);
+      glints.push(gA, gB, gC);
+    }
 
-    /* ---------- bloom (the shine) ---------- */
-    const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      Q.bloom, 0.5, 0.85  // strength, radius, threshold (gentle glow, only true highlights)
-    );
-    composer.addPass(bloom);
-    composer.addPass(new OutputPass());
+    /* ---------- bloom (the shine) — desktop only; too heavy for phones ---------- */
+    let composer = null, bloom = null;
+    if (Q.useBloom) {
+      composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, camera));
+      bloom = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        Q.bloom, 0.5, 0.85  // strength, radius, threshold (gentle glow, only true highlights)
+      );
+      composer.addPass(bloom);
+      composer.addPass(new OutputPass());
+    }
 
     /* ---------- interaction / timeline ---------- */
     const audio = document.getElementById('audio');
@@ -530,6 +538,15 @@
 
     const easeInOut = (t) => t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
 
+    // optional FPS read-out: add ?fps to the URL to see it
+    const showFps = /[?&]fps/i.test(location.search);
+    let fpsEl = null, fpsFrames = 0, fpsLast = performance.now();
+    if (showFps) {
+      fpsEl = document.createElement('div');
+      fpsEl.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99;font:14px monospace;color:#9effb0;background:rgba(0,0,0,.55);padding:4px 9px;border-radius:7px';
+      document.body.appendChild(fpsEl);
+    }
+
     const clock = new THREE.Clock();
     function animate() {
       requestAnimationFrame(animate);
@@ -538,16 +555,26 @@
 
       const tt = now * 0.001;
 
+      if (showFps) {
+        fpsFrames++;
+        if (now - fpsLast >= 500) {
+          fpsEl.textContent = Math.round(fpsFrames * 1000 / (now - fpsLast)) + ' fps';
+          fpsFrames = 0; fpsLast = now;
+        }
+      }
+
       // ambient life before she taps — spin plus a gentle wobble so more facets flash
       diamond.rotation.y += dt * 0.4;
       diamond.rotation.x = -0.12 + Math.sin(tt * 0.35) * 0.08;
       diamond.rotation.z = Math.sin(tt * 0.27) * 0.06;
       stars.rotation.y += dt * 0.01;
 
-      // travelling glints
-      glintA.position.set(Math.cos(tt*0.9)*5, Math.sin(tt*1.3)*3 + 1, Math.sin(tt*0.9)*5);
-      glintB.position.set(Math.cos(tt*0.7+2)*5, Math.sin(tt*0.9+1)*3, Math.sin(tt*0.7+2)*5);
-      glintC.position.set(Math.cos(-tt*1.1)*4.5, Math.cos(tt*0.6)*3, Math.sin(-tt*1.1)*4.5);
+      // travelling glints (desktop)
+      if (glints.length) {
+        glints[0].position.set(Math.cos(tt*0.9)*5, Math.sin(tt*1.3)*3 + 1, Math.sin(tt*0.9)*5);
+        glints[1].position.set(Math.cos(tt*0.7+2)*5, Math.sin(tt*0.9+1)*3, Math.sin(tt*0.7+2)*5);
+        glints[2].position.set(Math.cos(-tt*1.1)*4.5, Math.cos(tt*0.6)*3, Math.sin(-tt*1.1)*4.5);
+      }
 
       // twinkling sparkles
       for (const s of sparkles) {
@@ -573,7 +600,7 @@
           revealed = true;
           messageEl.classList.add('show');
         }
-        bloom.strength = revealed
+        if (bloom) bloom.strength = revealed
           ? Math.min(Q.bloom + (t - REVEAL_AT) * 0.12, Q.bloom + 0.27)
           : Q.bloom;
 
@@ -583,7 +610,8 @@
         }
       }
 
-      composer.render();
+      if (composer) composer.render();
+      else renderer.render(scene, camera);
     }
     animate();
 
@@ -592,7 +620,7 @@
       const w = window.innerWidth, h = window.innerHeight;
       camera.aspect = w / h; camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-      composer.setSize(w, h);
+      if (composer) composer.setSize(w, h);
     });
   </script>
 </body>
