@@ -355,7 +355,7 @@
 
     /* ---------- sparkles around the gem ---------- */
     (function placeSparkles() {
-      const spots = [[18,30],[82,26],[50,8],[30,64],[72,60],[50,88],[8,46],[92,44]];
+      const spots = [[18,30],[82,26],[50,8],[30,64],[72,60]];   // none on the outer tips (left, right, bottom)
       for (let i = 0; i < spots.length; i++) {
         const s = document.createElement('div');
         s.className = 'spark';
